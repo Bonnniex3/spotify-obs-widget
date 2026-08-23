@@ -6,6 +6,8 @@ over a full-bleed video background — a vertical 9:16 clip turned a quarter
 turn so it fills the whole bar. Tracks without a clip show slowly drifting, blurred
 album art instead.
 
+![The widget in OBS](docs/widget.png)
+
 Note up front: **Spotify's own Canvas videos can't be fetched automatically** — that
 route is blocked by Spotify. You supply the clips. Details below.
 
@@ -258,6 +260,19 @@ cover keeps its own rounded tile, inset highlight and drop shadow so it reads as
 sitting *on* the card; a hairline rule sits between the halves, brightest in the middle
 so it reads as a deliberate divide rather than a box edge; and that rule carries a 1px
 dark offset which gives it a slight engraved feel over bright Canvas frames.
+
+### The accent colour follows the artwork
+
+Every colour that isn't text — progress fill, waveform bars, the lyric line — is derived
+from the current cover. `widget.js` downsamples the artwork to 32x32, buckets the pixels
+by coarse RGB, and weights each bucket towards saturated mid-tones, so the result is a
+colour someone would actually name rather than the muddy average. It's then forced bright
+and saturated enough to stay legible over video.
+
+![The same widget across four different covers](docs/accents.png)
+
+Four tracks, no configuration between them. Set `?accent=%23ffffff` (or any CSS colour)
+if you'd rather it stayed fixed.
 
 ---
 
