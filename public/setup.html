@@ -78,13 +78,10 @@
       background of the whole bar.
     </p>
     <p class="muted">
-      <b>Fetching them from Spotify automatically doesn't work.</b> Canvas isn't in the public API, and
-      Spotify has closed the internal route it used to come from &mdash; that endpoint now answers
-      <i>"usage of this endpoint is not permitted under the Spotify Developer Terms"</i>. Working around
-      that would mean defeating an access control they put there on purpose, so this widget doesn't.
+      <b>Fetching them from Spotify automatically is deprecated</b> and the widget no longer tries.
     </p>
     <p class="muted">
-      Instead, drop your own clip at <code>public/canvas/&lt;trackId&gt;.mp4</code> and it becomes the
+      Drop your own clip at <code>public/canvas/&lt;trackId&gt;.mp4</code> and it becomes the
       background for that track. The track ID is the last part of a Spotify track link &mdash; from
       <code>open.spotify.com/track/<b>2VEFILxPIsvijHQtwWSVU9</b></code> the file would be
       <code>2VEFILxPIsvijHQtwWSVU9.mp4</code>. Vertical clips look best, but anything works.

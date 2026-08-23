@@ -8,8 +8,7 @@ album art instead.
 
 ![The widget in OBS](docs/widget.png)
 
-Note up front: **Spotify's own Canvas videos can't be fetched automatically** — that
-route is blocked by Spotify. You supply the clips. Details below.
+Fetching Spotify's own Canvas videos is **deprecated** — you supply the clips yourself.
 
 Zero dependencies. Plain Node, nothing to `npm install`.
 
@@ -34,34 +33,10 @@ match → tick **Shutdown source when not visible**.
 | Piece | Source | Reliability |
 | --- | --- | --- |
 | Title, artist, album, artwork, progress, play state | Official Spotify Web API | Stable, documented |
-| Canvas video | Your own files in `public/canvas/` | Works; you supply the clips |
-| Canvas video (automatic) | Spotify's internal endpoint | **Blocked by Spotify — see below** |
+| Video background | Your own clips in `public/canvas/` | Auto-fetch deprecated |
 | Waveform | ffmpeg capturing your audio device, FFT'd in Node | Real audio, not synthesised |
 | Lyrics | LRCLIB, or your own `.lrc` files | Free, no key; coverage varies |
 | GIF tempo | Beat detection over the same captured audio | Reliable on 4-on-the-floor |
-
-### The Canvas caveat, up front
-
-**Automatic Canvas fetching does not work, and this project no longer attempts it.**
-
-Canvas is not exposed by any public Spotify API. The only route was an internal endpoint,
-and Spotify has closed it:
-
-- `https://open.spotify.com/get_access_token` returns **403 URL Blocked** at their CDN.
-- `https://open.spotify.com/api/token` returns **400** with: *"Usage of this endpoint is
-  not permitted under the Spotify Developer Terms and Developer Policy, and applicable
-  law."*
-
-Getting a token past that means lifting the rotating secret out of Spotify's web player
-bundle to defeat the check. That's circumvention of an access control the provider put
-there deliberately, so `lib/canvas.js` stops and reports the reason instead.
-
-**What you get instead**, and it still looks good:
-
-- **Your own clips** — drop a video at `public/canvas/<trackId>.mp4` and the widget uses
-  it as the rotated background for that track. Fully under your control. See below.
-- **Animated album art** — the default. Blurred, saturated, slowly drifting, with the
-  accent colour pulled from the artwork.
 
 ## Setup detail
 
@@ -79,20 +54,14 @@ Works with Spotify Free; playback state is readable on any account tier.
 
 ### 2. Waveform audio (optional)
 
-The waveform is a genuine spectrum of what's playing. Spotify's `audio-analysis`
-endpoint returns **403** for any app created after Nov 2024, so there's no track data to
-draw from — instead the server captures an audio device with ffmpeg, FFTs it, and streams
-band levels to the widget over SSE.
+A real spectrum of whatever is playing: the server captures an audio device with ffmpeg,
+FFTs it, and streams band levels to the widget over SSE.
 
 Pick the device on the setup page. It must be a **loopback** device that carries your
 music — a virtual cable, a "stream mix", or Stereo Mix. A microphone won't do it.
 
 Requires `ffmpeg` on PATH (or set `ffmpegPath` in `config.json`). Capture only runs while
 a widget is actually connected, so nothing is recorded when OBS isn't showing the source.
-
-Analysis happens server-side rather than with WebAudio in the page because OBS browser
-sources are unreliable about granting microphone permission — this way the page only ever
-receives numbers.
 
 Tuning knobs in `config.json`:
 
@@ -141,8 +110,7 @@ than a boxed thumbnail.
 The folder is watched, so a new file is picked up within a second — no restart needed.
 With several files present, pick one with `?gifname=<filename-without-extension>`.
 
-**How the beat-lock works.** Spotify's tempo data is in `audio-features`, which is 403 for
-apps created after Nov 2024, so tempo is detected from the audio itself: lowpass at 150Hz
+**How the beat-lock works.** Tempo is detected from the audio itself: lowpass at 150Hz
 to isolate the kick, positive spectral flux for onsets, then autocorrelate the onset
 envelope over 80–200 BPM. Correlating at 1×/2×/3×/4× the beat period is what stops it
 settling on half or double tempo. Playback rate is then set so one loop spans a whole
@@ -165,10 +133,8 @@ Caveats worth knowing:
 
 A single synced line appears under the artist, changing in time with playback.
 
-Spotify's own lyrics are Musixmatch-licensed and only reachable through the same
-internal endpoints that are blocked for Canvas, so they're out for the same reason.
-Instead this uses **[LRCLIB](https://lrclib.net)** — a free, open, no-auth lyrics API
-that serves LRC (timestamped lines). Nothing to configure; it just works.
+Lyrics come from **[LRCLIB](https://lrclib.net)** — a free, open, no-auth API serving LRC
+(timestamped lines). Nothing to configure; it just works.
 
 Only *synced* lyrics are used. Plain unsynced text can't be highlighted line by line, so
 it's treated as "no lyrics" rather than dumping a wall of text into the widget.
@@ -193,10 +159,13 @@ A note worth making once: putting lyrics on a public stream is displaying someon
 copyrighted text. Plenty of streamers do it and it's your call — the widget just makes it
 possible. `?lyrics=0` turns it off.
 
-### 5. Canvas files (optional)
+### 5. Video backgrounds (optional)
 
-Drop a video at `public/canvas/<trackId>.mp4` (or `.webm`) and it will be used for that
-track, ahead of anything fetched from Spotify. The track ID is the last part of a
+Fetching Spotify's Canvas clips automatically is **deprecated** and the widget no longer
+tries. Supply your own instead.
+
+Drop a video at `public/canvas/<trackId>.mp4` (or `.webm`) and it becomes the rotated
+background for that track. The track ID is the last part of a
 Spotify track link, e.g. `open.spotify.com/track/2VEFILxPIsvijHQtwWSVU9` -> `2VEFILxPIsvijHQtwWSVU9.mp4`.
 Vertical clips suit the rotation best, but anything works.
 
@@ -295,7 +264,7 @@ scaled measurement leaves the video a few pixels short of the edges.
 ```
 server.js          HTTP server, playback poll, OAuth routes, art/video proxies
 lib/spotify.js     Official Web API: PKCE auth, token refresh, currently-playing
-lib/canvas.js      Canvas lookup - now reports why the internal route is unavailable
+lib/canvas.js      Local clip lookup (auto-fetch deprecated)
 lib/audio.js       ffmpeg capture, FFT, log-spaced bands, beat detection, SSE broadcast
 lib/gif.js         GIF/WebP -> video transcoding and caching, so playbackRate can drive it
 lib/lyrics.js      LRCLIB lookup, local .lrc override, LRC parsing
@@ -317,9 +286,8 @@ see it regardless. Check `http://127.0.0.1:8888/api/status`.
 **"INVALID_CLIENT: Invalid redirect URI"** — the redirect URI in the Spotify dashboard
 must be `http://127.0.0.1:8888/callback` exactly. Not `localhost`.
 
-**Canvas never appears** — expected. Automatic fetching is blocked by Spotify (see above).
-Use `public/canvas/<trackId>.mp4` for tracks you want a clip on; everything else shows
-animated album art.
+**No video background** — expected unless you've added a clip. Auto-fetch is deprecated;
+drop your own at `public/canvas/<trackId>.mp4`. Everything else shows animated album art.
 
 **Waveform is flat** — hit **Test levels** on the setup page. It reports frames received
 and peak level, which separates "wrong device" from "nothing playing" from "ffmpeg
