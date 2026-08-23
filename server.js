@@ -266,9 +266,17 @@ const server = http.createServer(async (req, res) => {
       let raw = '';
       for await (const chunk of req) raw += chunk;
       const body = JSON.parse(raw || '{}');
+      const prevClientId = config.clientId;
       const patch = {};
       for (const k of ['clientId', 'spDc', 'webToken', 'audioDevice', 'ffmpegPath']) {
         if (typeof body[k] === 'string') patch[k] = body[k].trim();
+      }
+      // Tokens are issued against a specific client ID; keeping them after a swap
+      // leaves the server thinking it's linked while every refresh fails.
+      if (patch.clientId && patch.clientId !== prevClientId) {
+        try { fs.rmSync(path.join(__dirname, 'tokens.json'), { force: true }); } catch { /* nothing to clear */ }
+        spotify.tokens = null;
+        console.log('  Client ID changed - cleared stored tokens, re-link required.');
       }
       saveConfig(patch);
       if ('audioDevice' in patch) { audio.stop(); if (audio.clients.size) audio.start(); }
