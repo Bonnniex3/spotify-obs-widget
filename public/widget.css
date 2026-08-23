@@ -36,6 +36,11 @@ html, body {
   font-family: var(--font);
   color: var(--text);
   overflow: hidden;
+  /* An overlay should never be selectable or draggable - a stray click in the
+     OBS source's interact window would otherwise leave a highlight on screen. */
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
   /* OBS composites the page; keep text crisp on top of video. */
   -webkit-font-smoothing: antialiased;
 }
