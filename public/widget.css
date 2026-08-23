@@ -1,0 +1,365 @@
+/* Spotify OBS widget
+   Everything is driven by CSS variables so the query-string options in widget.js
+   can retheme the whole thing without touching layout rules. */
+
+:root {
+  --w: 520px;
+  --radius: 18px;
+  --cover: 100px;
+  --gap: 14px;
+  --pad: 14px;
+  --split: 12px;          /* space between the cover blob and the player */
+  --coverradius: 20px;
+  --gif: 62px;
+  --gifradius: 12px;
+  --rotate: 90deg;
+  --accent: #1db954;
+  --text: #ffffff;
+  --muted: rgba(255, 255, 255, 0.62);
+  --scrim: 0.55;
+  --wave: 54px;
+  --wave-gap: 4px;
+  --wave-alpha: 0.4;
+  --wave-sat: 0.7;        /* pulls the accent back towards neutral */
+  --bg-blur: 26px;
+  --font: "Segoe UI Variable Display", "Segoe UI", Inter, system-ui, -apple-system, sans-serif;
+
+  /* Written by widget.js from the measured stage box - see setVideoBox(). */
+  --video-w: 520px;
+  --video-h: 128px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: transparent;
+  font-family: var(--font);
+  color: var(--text);
+  overflow: hidden;
+  /* OBS composites the page; keep text crisp on top of video. */
+  -webkit-font-smoothing: antialiased;
+}
+
+body { display: flex; align-items: flex-start; justify-content: flex-start; }
+
+/* ---------- stage ---------- */
+
+.stage {
+  position: relative;
+  width: var(--w);
+  border-radius: var(--radius);
+  overflow: hidden;
+  isolation: isolate;
+  opacity: 0;
+  transform: translateY(10px) scale(0.985);
+  transition: opacity .45s ease, transform .45s cubic-bezier(.2, .8, .2, 1);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, .35),
+    0 18px 45px rgba(0, 0, 0, .45),
+    inset 0 0 0 1px rgba(255, 255, 255, .07);
+}
+
+/* The cover keeps its own tile treatment so it reads as a distinct piece sitting
+   on the card, rather than a hole cut out of the background. */
+.cover-card {
+  position: relative;
+  flex: 0 0 var(--cover);
+  width: var(--cover);
+  height: var(--cover);
+  border-radius: var(--coverradius);
+  overflow: hidden;
+  background: #0a0a0a;
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, .5),
+    inset 0 0 0 1px rgba(255, 255, 255, .12);
+}
+.cover-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Hairline rule between the two halves: brightest in the middle so it reads as a
+   deliberate divide rather than a box edge. */
+.divider {
+  flex: 0 0 1px;
+  align-self: center;
+  height: calc(var(--cover) * 0.74);
+  margin: 0 var(--split);
+  background: linear-gradient(180deg,
+    transparent 0%,
+    rgba(255, 255, 255, .30) 22%,
+    rgba(255, 255, 255, .38) 50%,
+    rgba(255, 255, 255, .30) 78%,
+    transparent 100%);
+  box-shadow: 1px 0 0 rgba(0, 0, 0, .35);
+}
+.stage[data-divider="0"] .divider { display: none; }
+
+.stage[data-active="1"] { opacity: 1; transform: none; }
+
+/* ---------- beat-locked GIF ---------- */
+
+.gif {
+  position: absolute;
+  top: var(--pad);
+  right: var(--pad);
+  z-index: 2;
+  width: var(--gif);
+  height: var(--gif);
+  object-fit: cover;
+  border-radius: var(--gifradius);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .5), inset 0 0 0 1px rgba(255, 255, 255, .12);
+  opacity: 0;
+  transition: opacity .5s ease;
+  pointer-events: none;
+}
+.stage[data-gif="1"] .gif { opacity: 1; }
+
+/* A clip with transparency is a sticker, not a thumbnail - the tile chrome would
+   just draw a box around a cut-out. Keep only a soft drop shadow. */
+.stage[data-gifalpha="1"] .gif {
+  border-radius: 0;
+  box-shadow: none;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, .55));
+  object-fit: contain;
+}
+
+/* The text has to stop before it runs under the clip. */
+.stage[data-gif="1"] .meta { padding-right: calc(var(--gif) + var(--pad)); }
+
+/* ---------- background ---------- */
+
+.bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; background: #0a0a0a; }
+
+/* The video box is sized swapped (stage height x stage width), then turned a
+   quarter turn, so after rotation it lands exactly on the stage's footprint.
+   object-fit: cover then crops the 9:16 source into that box. */
+.bg-video {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--video-w);
+  height: var(--video-h);
+  object-fit: cover;
+  transform: translate(-50%, -50%) rotate(var(--rotate));
+  transform-origin: center;
+  opacity: 0;
+  transition: opacity .7s ease;
+}
+.stage[data-canvas="1"] .bg-video { opacity: 1; }
+
+.bg-art {
+  position: absolute;
+  inset: -12%;
+  background-size: cover;
+  background-position: center;
+  filter: blur(var(--bg-blur)) saturate(1.5);
+  transform: scale(1.18);
+  will-change: transform;
+  animation: drift 26s ease-in-out infinite alternate;
+}
+
+/* With a Canvas on top the artwork is only a backstop - dim it so any
+   letterboxed edge reads as depth rather than as a second image. */
+.stage[data-canvas="1"] .bg-art { filter: blur(34px) saturate(1.2) brightness(.65); }
+
+@keyframes drift {
+  from { transform: scale(1.16) translate3d(-1.5%, -1%, 0); }
+  to   { transform: scale(1.26) translate3d(1.5%, 1.5%, 0); }
+}
+
+.scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(100deg,
+      rgba(0, 0, 0, calc(var(--scrim) + .22)) 0%,
+      rgba(0, 0, 0, var(--scrim)) 45%,
+      rgba(0, 0, 0, calc(var(--scrim) - .18)) 100%),
+    radial-gradient(120% 140% at 0% 100%, rgba(0, 0, 0, .5), transparent 65%);
+}
+
+/* ---------- content ---------- */
+
+.content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  padding: var(--pad);
+}
+
+.cover-sheen {
+  position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(150deg, rgba(255, 255, 255, .2), transparent 42%);
+}
+
+.meta { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+
+/* ---------- text + marquee ---------- */
+
+.line { overflow: hidden; white-space: nowrap; }
+
+/* Only fade the edges while the text is actually scrolling - otherwise a short
+   title would sit there with its first letter dimmed for no reason. */
+.line.fading {
+  mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 14px), transparent 100%);
+}
+
+.scroller { display: inline-block; white-space: nowrap; will-change: transform; }
+.scroller.marquee { animation: marquee var(--dur, 12s) linear infinite alternate; }
+
+@keyframes marquee {
+  0%, 18%   { transform: translateX(0); }
+  82%, 100% { transform: translateX(var(--shift, 0px)); }
+}
+
+.title-line {
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -.015em;
+  line-height: 1.34;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .7);
+}
+
+.artist-line {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  line-height: 1.4;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .65);
+}
+
+/* ---------- lyrics ---------- */
+
+/* The row is only in the flow once a track actually has synced lyrics, so
+   instrumentals leave no dead gap. Toggling display rather than animating height:
+   this is a column-flex child, where an explicit height is a shrinkable basis
+   rather than a guarantee, and it collapses back to zero. The fade lives on the
+   inner span instead, which is a plain inline-block and animates predictably. */
+.lyric-line {
+  display: none;
+  margin-top: 3px;
+  font-size: 13.5px;
+  font-weight: 550;
+  letter-spacing: -.005em;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--accent) 45%, white);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .8);
+}
+.stage[data-lyrics="1"] .lyric-line { display: block; }
+
+#lyric {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity .22s ease, transform .22s ease;
+}
+#lyric.on { opacity: 1; transform: none; }
+
+/* ---------- timeline ---------- */
+
+.timeline { margin-top: 10px; }
+
+.rail {
+  position: relative;
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, .25);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .35);
+}
+
+.fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0%;
+  border-radius: 99px;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--accent) 70%, white) 0%,
+    var(--accent) 100%);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.fill .head {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px -4.5px 0 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 8px rgba(0, 0, 0, .55);
+  opacity: 0;
+  transform: scale(.4);
+  transition: opacity .25s ease, transform .25s ease;
+}
+.stage[data-playing="1"] .fill .head { opacity: 1; transform: scale(1); }
+
+.times {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-top: 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
+  color: var(--muted);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .7);
+}
+
+/* ---------- waveform ---------- */
+
+.waveform {
+  position: relative;
+  z-index: 1;
+  height: var(--wave);
+  margin-top: calc(var(--pad) * -1);
+}
+.stage[data-wave="0"] .waveform { display: none; }
+
+.wave-bars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--wave-gap);
+  padding: 0 var(--pad);
+  /* Transparency on the layer, not per bar: one knob, and overlapping glows
+     can't stack up into opaque patches. Desaturating here rather than baking
+     paler colours into the gradient keeps it tunable from the URL. */
+  opacity: var(--wave-alpha);
+  filter: saturate(var(--wave-sat));
+}
+
+.wave-bars i {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  border-radius: 3px 3px 1px 1px;
+  transform-origin: bottom;
+  transform: scaleY(0.03);
+  will-change: transform;
+  /* Mostly white at the tip easing into a pale tint of the accent - the accent
+     at full strength was too hot sitting over bright Canvas frames. */
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--accent) 16%, white) 0%,
+    color-mix(in srgb, var(--accent) 38%, white) 45%,
+    color-mix(in srgb, var(--accent) 56%, white) 100%);
+}
+
+
+/* No artwork (local files): hide the cover tile and let the backdrop carry it. */
+.stage[data-noart="1"] .cover-card,
+.stage[data-noart="1"] .divider { display: none; }
+.stage[data-noart="1"] .bg { background: linear-gradient(115deg, #1c1f26 0%, #0d0f13 55%, #15181e 100%); }
+
+/* ---------- minimal layout (no cover art) ---------- */
+
+.stage[data-layout="minimal"] .cover-card,
+.stage[data-layout="minimal"] .divider { display: none; }
+
+/* ---------- reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-art, .scroller.marquee { animation: none; }
+}

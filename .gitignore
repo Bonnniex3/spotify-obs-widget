@@ -1,0 +1,9 @@
+config.json
+tokens.json
+public/canvas/*
+!public/canvas/.gitkeep
+public/gif/.converted/
+public/gif/*
+!public/gif/.gitkeep
+public/lyrics/*
+!public/lyrics/.gitkeep

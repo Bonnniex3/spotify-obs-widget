@@ -1,0 +1,11 @@
+{
+  "name": "spotify-obs-widget",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Now-playing widget for OBS with Spotify Canvas video backgrounds. Zero dependencies.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": { "node": ">=18" }
+}

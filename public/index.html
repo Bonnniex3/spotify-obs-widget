@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Spotify Widget</title>
+<link rel="stylesheet" href="/widget.css">
+</head>
+<body>
+<div id="stage" class="stage" data-layout="bar" data-active="0" data-canvas="0">
+
+  <div class="bg">
+    <div id="bgArt" class="bg-art"></div>
+    <!-- Spotify Canvas is a 9:16 clip, turned a quarter turn to fill the card. -->
+    <video id="video" class="bg-video" muted playsinline loop preload="auto"></video>
+    <div class="scrim"></div>
+  </div>
+
+  <!-- Beat-locked loop. Speed is set from detected BPM so the loop lands on-beat. -->
+  <video id="gif" class="gif" muted playsinline loop preload="auto"></video>
+
+  <div class="content">
+    <div class="cover-card" id="coverCard">
+      <img id="cover" alt="">
+      <div class="cover-sheen"></div>
+    </div>
+
+    <!-- Separates the cover from the player without breaking the card apart. -->
+    <div class="divider"></div>
+
+    <div class="meta">
+      <div class="line title-line">
+        <div id="title" class="scroller"><span></span></div>
+      </div>
+      <div class="line artist-line">
+        <div id="artist" class="scroller"><span></span></div>
+      </div>
+
+      <div class="line lyric-line"><span id="lyric"></span></div>
+
+      <div class="timeline">
+        <div class="rail">
+          <div id="fill" class="fill"><i class="head"></i></div>
+        </div>
+        <div class="times">
+          <span id="elapsed">0:00</span>
+          <span id="duration">0:00</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live spectrum of the actual audio, analysed server-side. -->
+  <div class="waveform" id="wave">
+    <div class="wave-bars" id="waveBase"></div>
+  </div>
+</div>
+
+<script src="/widget.js"></script>
+</body>
+</html>

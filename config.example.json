@@ -1,0 +1,9 @@
+{
+  "port": 8888,
+  "clientId": "your-spotify-client-id",
+  "audioDevice": "",
+  "ffmpegPath": "",
+  "waveBands": 28,
+  "waveGainDb": 6,
+  "waveRelease": 0
+}

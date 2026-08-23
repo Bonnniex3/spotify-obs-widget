@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Spotify Widget - Setup</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 40px 24px 80px;
+    font: 15px/1.65 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    background: radial-gradient(1200px 700px at 20% -10%, #16281d, #0b0d10 60%);
+    color: #e6edf3;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 26px; letter-spacing: -.02em; margin: 0 0 4px; }
+  .sub { color: #8b949e; margin: 0 0 30px; }
+  section {
+    background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.09);
+    border-radius: 14px; padding: 20px 22px; margin-bottom: 16px;
+  }
+  h2 { font-size: 15px; margin: 0 0 12px; display: flex; align-items: center; gap: 9px; }
+  .num {
+    width: 22px; height: 22px; border-radius: 50%; background: #1db954; color: #05140b;
+    display: grid; place-items: center; font-size: 12px; font-weight: 700; flex: none;
+  }
+  label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: #8b949e; margin: 14px 0 5px; }
+  input, select {
+    width: 100%; padding: 9px 11px; border-radius: 8px; font: inherit; font-size: 14px;
+    background: #0d1117; border: 1px solid #2a313c; color: #e6edf3;
+  }
+  input:focus, select:focus { outline: 2px solid #1db954; outline-offset: -1px; border-color: transparent; }
+  button {
+    margin-top: 14px; padding: 9px 18px; border-radius: 8px; border: 0; font: inherit; font-weight: 600;
+    background: #1db954; color: #05140b; cursor: pointer;
+  }
+  button:hover { background: #22d365; }
+  button.ghost { background: transparent; border: 1px solid #2a313c; color: #e6edf3; }
+  code, .url {
+    font-family: ui-monospace, Consolas, monospace; font-size: 13px;
+    background: #0d1117; border: 1px solid #2a313c; border-radius: 7px; padding: 3px 7px;
+  }
+  .url { display: block; padding: 10px 12px; word-break: break-all; margin-top: 12px; }
+  ol { padding-left: 20px; } li { margin: 5px 0; }
+  .muted { color: #8b949e; font-size: 13px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .row > div { flex: 1 1 150px; }
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 11.5px; font-weight: 600; }
+  .ok { background: rgba(29,185,84,.16); color: #3fdd77; }
+  .bad { background: rgba(248,81,73,.16); color: #ff8781; }
+  iframe { width: 100%; height: 210px; border: 0; border-radius: 12px; background:
+    repeating-conic-gradient(#1a1d23 0% 25%, #23262d 0% 50%) 50% / 20px 20px; margin-top: 14px; }
+  a { color: #3fdd77; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Spotify OBS Widget</h1>
+  <p class="sub">Local setup &mdash; nothing here leaves your machine.</p>
+
+  <section>
+    <h2><span class="num">1</span> Create a Spotify app</h2>
+    <ol>
+      <li>Open the <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noreferrer">Spotify Developer Dashboard</a> and click <b>Create app</b>.</li>
+      <li>Name it anything. For <b>Redirect URI</b> paste exactly: <code id="redir">http://127.0.0.1:8888/callback</code></li>
+      <li>Tick <b>Web API</b>, save, then copy the <b>Client ID</b>.</li>
+    </ol>
+    <label for="clientId">Client ID</label>
+    <input id="clientId" placeholder="e.g. 4f2a9c1e8b7d4a06b3c5e9f1a2d8c740" autocomplete="off" spellcheck="false">
+    <button id="saveId">Save &amp; connect Spotify</button>
+    <span id="linkState" class="pill bad" style="margin-left:10px">not linked</span>
+  </section>
+
+  <section>
+    <h2><span class="num">2</span> Canvas video <span class="muted" style="font-weight:400">&mdash; optional</span></h2>
+    <p class="muted">
+      Canvas clips are vertical 9:16 videos. The widget turns one a quarter turn and uses it as the
+      background of the whole bar.
+    </p>
+    <p class="muted">
+      <b>Fetching them from Spotify automatically doesn't work.</b> Canvas isn't in the public API, and
+      Spotify has closed the internal route it used to come from &mdash; that endpoint now answers
+      <i>"usage of this endpoint is not permitted under the Spotify Developer Terms"</i>. Working around
+      that would mean defeating an access control they put there on purpose, so this widget doesn't.
+    </p>
+    <p class="muted">
+      Instead, drop your own clip at <code>public/canvas/&lt;trackId&gt;.mp4</code> and it becomes the
+      background for that track. The track ID is the last part of a Spotify track link &mdash; from
+      <code>open.spotify.com/track/<b>2VEFILxPIsvijHQtwWSVU9</b></code> the file would be
+      <code>2VEFILxPIsvijHQtwWSVU9.mp4</code>. Vertical clips look best, but anything works.
+    </p>
+    <p class="muted">
+      Every other track shows animated, blurred album art instead &mdash; no setup needed.
+    </p>
+    <button class="ghost" id="testCanvas" type="button">Check current track</button>
+    <p id="canvasState" class="muted" style="margin-top:12px"></p>
+  </section>
+
+  <section>
+    <h2><span class="num">3</span> Waveform audio <span class="muted" style="font-weight:400">&mdash; optional</span></h2>
+    <p class="muted">
+      The waveform is a real spectrum of whatever is actually playing &mdash; Spotify exposes no audio
+      data, so the server captures an audio device with ffmpeg and analyses it. Pick the device that
+      carries your music (a loopback / virtual cable / "stream mix" device, not a microphone).
+    </p>
+    <label for="audioDevice">Capture device</label>
+    <select id="audioDevice"><option value="">&mdash; none, waveform stays flat &mdash;</option></select>
+    <button id="saveAudio">Save device</button>
+    <button class="ghost" id="testAudio" type="button">Test levels</button>
+    <p id="audioState" class="muted" style="margin-top:12px"></p>
+  </section>
+
+  <section>
+    <h2><span class="num">4</span> Build your OBS URL</h2>
+    <div class="row">
+      <div>
+        <label for="layout">Layout</label>
+        <select id="layout">
+          <option value="bar">Bar &mdash; cover art + text</option>
+          <option value="minimal">Minimal &mdash; text only</option>
+        </select>
+      </div>
+      <div>
+        <label for="w">Width (px)</label>
+        <input id="w" type="number" value="520" min="180" max="1920">
+      </div>
+      <div>
+        <label for="radius">Corner radius</label>
+        <input id="radius" type="number" value="18" min="0" max="60">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="accent">Accent colour</label>
+        <select id="accent">
+          <option value="auto">Auto &mdash; from album art</option>
+          <option value="%231db954">Spotify green</option>
+          <option value="%23ffffff">White</option>
+        </select>
+      </div>
+      <div>
+        <label for="scrim">Darkening (0&ndash;1)</label>
+        <input id="scrim" type="number" step="0.05" value="0.55" min="0" max="1">
+      </div>
+      <div>
+        <label for="canvasOn">Canvas video</label>
+        <select id="canvasOn"><option value="1">On</option><option value="0">Off</option></select>
+      </div>
+      <div>
+        <label for="rotate">Canvas rotation</label>
+        <select id="rotate">
+          <option value="90">90&deg; clockwise</option>
+          <option value="270">90&deg; anticlockwise</option>
+          <option value="0">None &mdash; crop upright</option>
+          <option value="180">180&deg;</option>
+        </select>
+      </div>
+    </div>
+
+    <code class="url" id="obsUrl"></code>
+    <button id="copy">Copy URL</button>
+    <p class="muted" style="margin-top:14px">
+      In OBS: <b>+</b> &rarr; <b>Browser</b> &rarr; paste the URL, set the size to match, and tick
+      <b>Shutdown source when not visible</b>. Leave <b>Custom CSS</b> empty.
+    </p>
+    <iframe id="preview" title="preview"></iframe>
+  </section>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const port = location.port || '8888';
+$('redir').textContent = 'http://127.0.0.1:' + port + '/callback';
+
+let linked = false;
+async function refresh() {
+  const s = await (await fetch('/api/status')).json();
+  const was = linked;
+  linked = !!s.linked;
+  $('linkState').textContent = linked ? 'linked' : 'not linked';
+  $('linkState').className = 'pill ' + (linked ? 'ok' : 'bad');
+  if (was !== linked) buildUrl();   // swap the preview between demo and live
+}
+refresh();
+setInterval(refresh, 4000);
+
+async function save(patch) {
+  await fetch('/api/config', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
+  });
+}
+
+$('saveId').onclick = async () => {
+  await save({ clientId: $('clientId').value });
+  location.href = '/login';
+};
+
+$('testCanvas').onclick = async () => {
+  $('canvasState').textContent = 'Checking...';
+  const s = await (await fetch('/api/status')).json();
+  const st = s.state || {};
+  if (!s.linked) $('canvasState').textContent = 'Link your Spotify account first (step 1).';
+  else if (!st.id) $('canvasState').textContent = 'Play something in Spotify first.';
+  else if (st.canvas) $('canvasState').textContent = 'Using your clip for "' + st.title + '".';
+  else $('canvasState').textContent = '"' + st.title + '" is showing animated album art. '
+       + 'To give it a video, save one as public/canvas/' + st.id + '.mp4 and replay the track.';
+};
+
+function buildUrl() {
+  const p = new URLSearchParams();
+  if ($('layout').value !== 'bar') p.set('layout', $('layout').value);
+  p.set('w', $('w').value);
+  p.set('radius', $('radius').value);
+  if ($('accent').value !== 'auto') p.set('accent', decodeURIComponent($('accent').value));
+  p.set('scrim', $('scrim').value);
+  if ($('canvasOn').value === '0') p.set('canvas', '0');
+  if ($('rotate').value !== '90') p.set('rotate', $('rotate').value);
+  $('obsUrl').textContent = location.origin + '/?' + p;
+  // Preview your real playback once linked; fall back to a fake track before that,
+  // so this pane never sits empty but also never lies about what's playing.
+  p.set('idle', '1');
+  if (!linked) p.set('demo', '1');
+  $('preview').src = location.origin + '/?' + p;
+  return $('obsUrl').textContent;
+}
+['layout', 'w', 'radius', 'accent', 'scrim', 'canvasOn', 'rotate'].forEach((id) => { $(id).oninput = buildUrl; $(id).onchange = buildUrl; });
+buildUrl();
+
+$('copy').onclick = () => navigator.clipboard.writeText($('obsUrl').textContent);
+
+// ---- audio device ----
+(async () => {
+  const r = await (await fetch('/api/audio/devices')).json();
+  const sel = $('audioDevice');
+  for (const d of r.devices || []) {
+    const o = document.createElement('option');
+    o.value = d; o.textContent = d;
+    if (d === r.selected) o.selected = true;
+    sel.appendChild(o);
+  }
+  if (r.error) $('audioState').textContent = r.error;
+  else if (!r.selected) $('audioState').textContent = 'No device selected yet - the waveform will sit flat.';
+})();
+
+$('saveAudio').onclick = async () => {
+  await save({ audioDevice: $('audioDevice').value });
+  $('audioState').textContent = $('audioDevice').value
+    ? 'Saved. Hit "Test levels" with music playing.'
+    : 'Cleared - the waveform will stay flat.';
+};
+
+$('testAudio').onclick = () => {
+  $('audioState').textContent = 'Listening for 3s - play something...';
+  let frames = 0, peak = 0;
+  const es = new EventSource('/api/audio');
+  es.onmessage = (ev) => {
+    frames++;
+    for (let i = 0; i < ev.data.length; i += 2) {
+      const v = parseInt(ev.data.substr(i, 2), 16) / 255;
+      if (v > peak) peak = v;
+    }
+  };
+  setTimeout(() => {
+    es.close();
+    if (!frames) $('audioState').textContent = 'No data. Check the device, or that ffmpeg is on PATH.';
+    else if (peak < 0.08) $('audioState').textContent =
+      frames + ' frames, but near silence (peak ' + peak.toFixed(2) + '). Wrong device, or nothing playing?';
+    else $('audioState').textContent =
+      'Working - ' + frames + ' frames, peak ' + peak.toFixed(2) + '.';
+  }, 3000);
+};
+</script>
+</body>
+</html>
