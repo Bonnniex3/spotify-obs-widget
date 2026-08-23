@@ -14,14 +14,19 @@ const PUBLIC = path.join(__dirname, 'public');
 const CANVAS_DIR = path.join(PUBLIC, 'canvas');
 
 const DEFAULTS = {
-  port: 8888, clientId: '', spDc: '', webToken: '', pollMs: 1000,
+  port: 8888, clientId: '', spDc: '', webToken: '', pollMs: 2500,
   audioDevice: '', ffmpegPath: '', waveBands: 28, waveGainDb: 6, waveRelease: 0,
 };
 
 function loadConfig() {
   let file = {};
   try { file = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { /* first run */ }
-  return { ...DEFAULTS, ...file };
+  const merged = { ...DEFAULTS, ...file };
+  // Floor the poll rate. A saved config from an older version overrides the
+  // default, so lowering the default alone doesn't protect existing installs -
+  // and polling harder than this is how you earn a multi-hour rate limit.
+  merged.pollMs = Math.max(2000, Number(merged.pollMs) || DEFAULTS.pollMs);
+  return merged;
 }
 let config = loadConfig();
 const getConfig = () => config;
@@ -43,6 +48,9 @@ const lyrics = new Lyrics(getConfig);
 // ---- playback poll ---------------------------------------------------------
 // One shared poll loop, no matter how many browser sources are connected.
 let state = { ok: false, reason: 'starting' };
+let lastGood = null;          // last successful read, to ride out short outages
+let failures = 0;
+let rateLimitedUntil = 0;
 
 function localCanvas(trackId) {
   for (const ext of ['mp4', 'webm']) {
@@ -106,11 +114,31 @@ async function poll() {
           }
         }
         state = next;
+        lastGood = next;
+        failures = 0;
+        rateLimitedUntil = 0;
       }
     }
   } catch (e) {
-    if (e.retryAfter) delay = Math.max(delay, e.retryAfter * 1000);
-    state = { ok: false, reason: e.message };
+    failures++;
+    if (e.retryAfter) {
+      // Spotify's Retry-After is authoritative; hammering it can extend the block.
+      rateLimitedUntil = Date.now() + e.retryAfter * 1000;
+      delay = Math.max(delay, e.retryAfter * 1000);
+      console.log('  Spotify rate limited - retrying in ' +
+        Math.round(e.retryAfter / 60) + ' min (' +
+        new Date(rateLimitedUntil).toLocaleTimeString() + ')');
+    } else {
+      // Ordinary failure: back off so a network drop doesn't spam the API.
+      delay = Math.min(30000, delay * Math.pow(2, Math.min(failures - 1, 4)));
+    }
+
+    // Don't blank the overlay for a brief hiccup - keep the last track for a few
+    // minutes. Beyond that it's more likely wrong than useful.
+    const age = lastGood ? Date.now() - lastGood.serverTime : Infinity;
+    state = (lastGood && age < 5 * 60e3)
+      ? { ...lastGood, stale: true, reason: e.message }
+      : { ok: false, reason: e.message };
   }
   setTimeout(poll, delay);
 }
@@ -224,6 +252,10 @@ const server = http.createServer(async (req, res) => {
         bpmConfidence: Number(audio.bpmConfidence.toFixed(2)),
         gifs: gifs.list().map((g) => ({ name: g.name, duration: Number(g.duration.toFixed(3)) })),
         gifError: gifs.lastError,
+        rateLimited: rateLimitedUntil > Date.now(),
+        rateLimitClearsAt: rateLimitedUntil > Date.now()
+          ? new Date(rateLimitedUntil).toISOString() : null,
+        pollMs: config.pollMs,
         lyricsLastError: lyrics.lastError,
         lyricsCached: lyrics.cache.size,
         state,
@@ -300,6 +332,19 @@ const server = http.createServer(async (req, res) => {
   } catch (e) {
     return json(res, 500, { error: e.message });
   }
+});
+
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') {
+    console.log('');
+    console.log('  Port ' + config.port + ' is already in use.');
+    console.log('  The widget is probably already running - check for another window.');
+    console.log('  Running two copies doubles the Spotify polling and risks a rate limit.');
+    console.log('');
+    process.exit(1);
+  }
+  console.log('  Server error: ' + e.message);
+  process.exit(1);
 });
 
 server.listen(config.port, '127.0.0.1', () => {
