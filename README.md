@@ -319,3 +319,9 @@ synced lyrics are used. To supply your own, drop an `.lrc` in `public/lyrics/`.
 
 **Progress bar drifts** — it's interpolated locally between polls and resynced when it
 drifts past 1.2s, so scrubbing snaps within a second.
+
+---
+
+## License
+
+MIT - free to use, modify and redistribute. See [LICENSE](LICENSE).
