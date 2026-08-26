@@ -418,6 +418,17 @@
   // ---- poll ----
   let lastId = null;
 
+  // The server refreshes its snapshot every pollMs, but the widget polls more
+  // often than that, so the same snapshot gets read several times while our own
+  // clock keeps advancing. Comparing against the raw progressMs makes a healthy
+  // clock look like drift and "corrects" it backwards. Age the snapshot forward
+  // to what it implies right now instead.
+  function serverPosition(s) {
+    if (!s.playing) return s.progressMs;
+    const age = Math.min(15000, Math.max(0, Date.now() - (s.serverTime || Date.now())));
+    return Math.min(s.progressMs + age, s.durationMs || Infinity);
+  }
+
   function render(s) {
     const live = s && s.ok && s.key;
 
@@ -440,7 +451,7 @@
       setArtwork(s);
       setCanvas(s);
       loadLyrics();
-      sync(s.progressMs, s.durationMs, s.playing);
+      sync(serverPosition(s), s.durationMs, s.playing);
       return;
     }
 
@@ -449,8 +460,9 @@
 
     // Only resync when we've actually drifted, so seeks snap but normal play stays smooth.
     const predicted = clock.progress + (clock.playing ? performance.now() - clock.at : 0);
-    if (s.playing !== clock.playing || Math.abs(predicted - s.progressMs) > 1200) {
-      sync(s.progressMs, s.durationMs, s.playing);
+    const actual = serverPosition(s);
+    if (s.playing !== clock.playing || Math.abs(predicted - actual) > 1500) {
+      sync(actual, s.durationMs, s.playing);
     }
   }
 
