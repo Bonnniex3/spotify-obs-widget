@@ -36,6 +36,7 @@ match → tick **Shutdown source when not visible**.
 | Video background | Your own clips in `public/canvas/` | Auto-fetch deprecated |
 | Waveform | ffmpeg capturing your audio device, FFT'd in Node | Real audio, not synthesised |
 | Lyrics | LRCLIB, or your own `.lrc` files | Free, no key; coverage varies |
+| Local-file cover art | The Windows media session | Needs `winsdk`; see below |
 | GIF tempo | Beat detection over the same captured audio | Reliable on 4-on-the-floor |
 
 ## Setup detail
@@ -159,7 +160,26 @@ A note worth making once: putting lyrics on a public stream is displaying someon
 copyrighted text. Plenty of streamers do it and it's your call — the widget just makes it
 possible. `?lyrics=0` turns it off.
 
-### 5. Video backgrounds (optional)
+### 5. Local-file cover art (optional)
+
+Spotify's Web API returns **no artwork for local files** - `album.images` comes back
+empty - so the cover tile would sit blank. Windows has the image though: Spotify hands a
+thumbnail to the system media session (the one behind the volume-key overlay), read from
+the file's own tags. The widget pulls it from there.
+
+```bash
+pip install winsdk
+```
+
+Without it, local files simply show no cover and the tile hides itself - everything else
+still works. Set `pythonPath` in `config.json` if your python isn't on PATH.
+
+Covers are cached per track in `.artcache/` and pruned after 60 entries. The media session
+always describes what's playing *now*, so the lookup passes the expected title along and
+discards the result if the track changed mid-call - otherwise a fast skip could file the
+wrong cover against the wrong song.
+
+### 6. Video backgrounds (optional)
 
 Fetching Spotify's Canvas clips automatically is **deprecated** and the widget no longer
 tries. Supply your own instead.
@@ -268,6 +288,7 @@ lib/canvas.js      Local clip lookup (auto-fetch deprecated)
 lib/audio.js       ffmpeg capture, FFT, log-spaced bands, beat detection, SSE broadcast
 lib/gif.js         GIF/WebP -> video transcoding and caching, so playbackRate can drive it
 lib/lyrics.js      LRCLIB lookup, local .lrc override, LRC parsing
+lib/localart.js    Cover art for local files, via the Windows media session
 lib/proto.js       ~60 lines of protobuf, just enough for the canvaz endpoint
 public/index.html  The widget
 public/widget.css  All the styling; every knob is a CSS variable

@@ -8,6 +8,7 @@ const { CanvasClient } = require('./lib/canvas');
 const { AudioAnalyser, listDevices } = require('./lib/audio');
 const { GifLibrary } = require('./lib/gif');
 const { Lyrics } = require('./lib/lyrics');
+const { LocalArt } = require('./lib/localart');
 
 const CONFIG_FILE = path.join(__dirname, 'config.json');
 const PUBLIC = path.join(__dirname, 'public');
@@ -44,6 +45,7 @@ const canvas = new CanvasClient(getConfig);
 const audio = new AudioAnalyser(getConfig, config.waveBands);
 const gifs = new GifLibrary(getConfig);
 const lyrics = new Lyrics(getConfig);
+const localArt = new LocalArt(getConfig);
 
 // ---- playback poll ---------------------------------------------------------
 // One shared poll loop, no matter how many browser sources are connected.
@@ -93,6 +95,7 @@ async function poll() {
             : (it.artists || []).map((a) => a.name).join(', '),
           album: isEpisode ? (it.show ? it.show.name : '') : (it.album ? it.album.name : ''),
           art: art.length ? art[0].url : null,
+          artUrl: art.length ? '/api/art?u=' + encodeURIComponent(art[0].url) : null,
           progressMs: p.progress_ms || 0,
           durationMs: it.duration_ms || 0,
           device: p.device ? p.device.name : null,
@@ -100,6 +103,14 @@ async function poll() {
           canvasSource: null,
           serverTime: Date.now(),
         };
+
+        // Local files carry no artwork from the API - Windows has it instead.
+        if (!next.artUrl && isLocal) {
+          next.artUrl = await localArt.get(next.key, it.name).catch(() => null);
+          next.artSource = next.artUrl ? 'windows' : null;
+        } else if (next.artUrl) {
+          next.artSource = 'spotify';
+        }
 
         // A local override wins, then the real Canvas lookup.
         const local = it.id ? localCanvas(it.id) : null;
@@ -219,6 +230,19 @@ const server = http.createServer(async (req, res) => {
 
     // Which clip the widget should loop, and how long it is - the widget needs the
     // duration to pick a rate that lands the loop on a whole number of beats.
+    // Cover pulled from the Windows media session for a local file.
+    if (p === '/api/localart') {
+      const file = localArt.pathFor(u.searchParams.get('k') || '');
+      if (!file) return send(res, 404, 'no local art');
+      return fs.readFile(file, (err, data) => {
+        if (err) return send(res, 404, 'no local art');
+        send(res, 200, data, 'image/png', {
+          'Cache-Control': 'public, max-age=86400',
+          'Access-Control-Allow-Origin': '*',
+        });
+      });
+    }
+
     if (p === '/api/gif') {
       const item = gifs.get(u.searchParams.get('name'));
       return json(res, 200, {
@@ -257,6 +281,8 @@ const server = http.createServer(async (req, res) => {
           ? new Date(rateLimitedUntil).toISOString() : null,
         pollMs: config.pollMs,
         lyricsLastError: lyrics.lastError,
+        localArtLastError: localArt.lastError,
+        localArtCached: localArt.cache.size,
         lyricsCached: lyrics.cache.size,
         state,
       });

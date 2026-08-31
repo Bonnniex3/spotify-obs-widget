@@ -201,18 +201,23 @@
   let currentCanvas = null;
 
   function setArtwork(track) {
-    // Local files carry no artwork; drop the cover tile rather than showing a gap.
-    el.stage.dataset.noart = track.art ? '0' : '1';
-    if (!track.art) {
+    // The server hands over a ready-to-use URL: proxied Spotify art, or a cover
+    // read from the Windows media session when it's a local file. Older payloads
+    // only had the raw Spotify URL, so fall back to proxying it ourselves.
+    const url = track.artUrl
+      || (track.art ? '/api/art?u=' + encodeURIComponent(track.art) : null);
+
+    // No art anywhere: drop the cover tile rather than showing an empty box.
+    el.stage.dataset.noart = url ? '0' : '1';
+    if (!url) {
       el.cover.removeAttribute('src');
       el.bgArt.style.backgroundImage = '';
       return;
     }
-    const proxied = '/api/art?u=' + encodeURIComponent(track.art);
-    if (el.cover.getAttribute('src') === proxied) return;
-    el.cover.src = proxied;
-    el.bgArt.style.backgroundImage = 'url("' + proxied + '")';
-    extractAccent(proxied);
+    if (el.cover.getAttribute('src') === url) return;
+    el.cover.src = url;
+    el.bgArt.style.backgroundImage = 'url("' + url + '")';
+    extractAccent(url);
   }
 
   function setCanvas(track) {
