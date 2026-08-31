@@ -36,7 +36,7 @@ match → tick **Shutdown source when not visible**.
 | Video background | Your own clips in `public/canvas/` | Auto-fetch deprecated |
 | Waveform | ffmpeg capturing your audio device, FFT'd in Node | Real audio, not synthesised |
 | Lyrics | LRCLIB, or your own `.lrc` files | Free, no key; coverage varies |
-| Local-file cover art | The Windows media session | Needs `winsdk`; see below |
+| Cover art | The local Spotify client, via the Windows media session | No network request; CDN as fallback |
 | GIF tempo | Beat detection over the same captured audio | Reliable on 4-on-the-floor |
 
 ## Setup detail
@@ -73,6 +73,7 @@ Tuning knobs in `config.json`:
 | `waveGainDb` | `6` | Input gain; raise if your mix is quiet |
 | `waveRelease` | `0` | Decay tails, 0–0.9. `0` = bars drop the instant the sound does |
 | `ffmpegPath` | `""` | Full path to ffmpeg if it isn't on PATH |
+| `artSource` | `"auto"` | `auto` = local client first, CDN fallback. `spotify` forces the CDN |
 
 The defaults are tuned for hard dance — narrow dB window, gamma curve, and **no smoothing
 at all** on the server: `waveRelease` is `0`, so every bar is the raw analysed value for
@@ -160,19 +161,26 @@ A note worth making once: putting lyrics on a public stream is displaying someon
 copyrighted text. Plenty of streamers do it and it's your call — the widget just makes it
 possible. `?lyrics=0` turns it off.
 
-### 5. Local-file cover art (optional)
+### 5. Cover art (optional but recommended)
 
-Spotify's Web API returns **no artwork for local files** - `album.images` comes back
-empty - so the cover tile would sit blank. Windows has the image though: Spotify hands a
-thumbnail to the system media session (the one behind the volume-key overlay), read from
-the file's own tags. The widget pulls it from there.
+Artwork is taken from **your own Spotify client** rather than Spotify's CDN. Spotify hands
+a thumbnail to the Windows media session - the one behind the volume-key overlay - and the
+widget reads it from there. No outbound request, so covers keep working even when the
+network doesn't.
+
+It's also the *only* source for **local files**: the Web API returns no artwork for those
+(`album.images` comes back empty), so the tile would otherwise sit blank.
 
 ```bash
 pip install winsdk
 ```
 
-Without it, local files simply show no cover and the tile hides itself - everything else
-still works. Set `pythonPath` in `config.json` if your python isn't on PATH.
+Without it, artwork falls back to Spotify's CDN and local files show no cover - everything
+else still works. Set `pythonPath` in `config.json` if your python isn't on PATH.
+
+The session thumbnail is 300x300 against the CDN's 640x640. That's ample for the cover
+tile, and the background is blurred heavily anyway. Set `"artSource": "spotify"` in
+`config.json` to force the CDN instead.
 
 Covers are cached per track in `.artcache/` and pruned after 60 entries. The media session
 always describes what's playing *now*, so the lookup passes the expected title along and

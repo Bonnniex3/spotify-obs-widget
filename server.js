@@ -17,6 +17,8 @@ const CANVAS_DIR = path.join(PUBLIC, 'canvas');
 const DEFAULTS = {
   port: 8888, clientId: '', spDc: '', webToken: '', pollMs: 2500,
   audioDevice: '', ffmpegPath: '', waveBands: 28, waveGainDb: 6, waveRelease: 0,
+  // auto = local Spotify client first, CDN as fallback. 'spotify' forces the CDN.
+  artSource: 'auto',
 };
 
 function loadConfig() {
@@ -34,7 +36,7 @@ const getConfig = () => config;
 
 function saveConfig(patch) {
   config = { ...config, ...patch };
-  const keep = ['port', 'clientId', 'spDc', 'webToken', 'pollMs', 'audioDevice', 'ffmpegPath', 'waveBands', 'waveGainDb', 'waveRelease'];
+  const keep = ['port', 'clientId', 'spDc', 'webToken', 'pollMs', 'audioDevice', 'ffmpegPath', 'waveBands', 'waveGainDb', 'waveRelease', 'artSource'];
   const out = {};
   for (const k of keep) out[k] = config[k];
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(out, null, 2));
@@ -104,13 +106,20 @@ async function poll() {
           serverTime: Date.now(),
         };
 
-        // Local files carry no artwork from the API - Windows has it instead.
-        if (!next.artUrl && isLocal) {
-          next.artUrl = await localArt.get(next.key, it.name).catch(() => null);
-          next.artSource = next.artUrl ? 'windows' : null;
-        } else if (next.artUrl) {
-          next.artSource = 'spotify';
+        // Prefer the cover the local Spotify client already holds. It needs no
+        // outbound request at all, so artwork keeps working when the network
+        // doesn't - and it's the only source for local files, which the Web API
+        // returns no images for. Spotify's CDN stays as the fallback for when
+        // winsdk isn't installed or the session has no thumbnail.
+        const mode = config.artSource || 'auto';
+        if (mode !== 'spotify') {
+          const fromWindows = await localArt.get(next.key, it.name).catch(() => null);
+          if (fromWindows) {
+            next.artUrl = fromWindows;
+            next.artSource = 'windows';
+          }
         }
+        if (!next.artSource) next.artSource = next.artUrl ? 'spotify' : null;
 
         // A local override wins, then the real Canvas lookup.
         const local = it.id ? localCanvas(it.id) : null;
@@ -283,6 +292,7 @@ const server = http.createServer(async (req, res) => {
         lyricsLastError: lyrics.lastError,
         localArtLastError: localArt.lastError,
         localArtCached: localArt.cache.size,
+        artSourceMode: config.artSource || 'auto',
         lyricsCached: lyrics.cache.size,
         state,
       });
